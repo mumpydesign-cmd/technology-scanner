@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0a0e17">
+<title>Tech Evolution AR</title>
+<style>
+:root{--bg:#0a0e17;--card:#141b2b;--line:#263148;--txt:#e8eefc;--dim:#93a0bd;--acc:#4de1ff;--acc2:#8a5cff;--glass:rgba(10,14,23,.78)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(120% 80% at 50% 0,#1a2440,var(--bg) 70%) var(--bg);color:var(--txt);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#cam,#gl{position:fixed;top:0;left:0;width:100%;height:100%}
+#cam{object-fit:cover;background:#000}
+body:not([data-mode=ar]) #cam{display:none}
+#gl{z-index:1;touch-action:none}
+
+button,.btn{font:inherit;font-weight:600;color:var(--txt);background:var(--card);border:1px solid var(--line);border-radius:16px;min-height:54px;padding:0 20px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+button:active,.btn:active{transform:scale(.97)}
+.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));border:0;color:#06101c}
+.ghost{background:none;border-color:transparent;color:var(--dim)}
+svg{width:24px;height:24px;fill:currentColor}
+
+/* full-screen pages */
+.screen{position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;display:none;overflow:auto;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));background:radial-gradient(120% 80% at 50% 0,#1a2440,var(--bg) 70%) var(--bg)}
+.screen.active{display:flex}
+.wrap{margin:auto;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;text-align:center}
+.logo{font-size:56px;line-height:1;background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+h1{font-size:34px;line-height:1.1;margin:0}
+h1 span{color:var(--acc)}
+h2{margin:0;font-size:26px}
+p{margin:0}
+.dim{color:var(--dim)}
+.note{text-align:left;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px 14px 34px;margin:0;color:var(--dim)}
+.note li+li{margin-top:6px}
+.note b{color:var(--txt)}
+.big{min-height:64px;font-size:20px}
+
+/* QR generator */
+#qrs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+#gen .wrap{max-width:760px;margin-top:0}
+.qrcard{background:#fff;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.qrcard canvas{width:100%;height:auto;display:block}
+.qrcard .btn{background:#0a0e17}
+.rowbtns{display:flex;gap:10px}
+.rowbtns>*{flex:1}
+
+/* AR / demo HUD */
+#view{position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;display:none;pointer-events:none}
+#view.active{display:block}
+#view button,#view input,#card{pointer-events:auto}
+#top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:max(12px,env(safe-area-inset-top)) 12px 0}
+#top button{min-height:48px;border-radius:24px;background:var(--glass);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);padding:0 16px}
+#exit{width:48px;padding:0!important;font-size:18px}
+#title{flex:1;font-weight:700;font-size:18px;text-shadow:0 1px 6px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chips{display:flex;gap:8px}
+.chip.on{border-color:var(--acc);color:var(--acc)}
+#track{flex-basis:100%;font-size:13px;color:#7dffb0;text-shadow:0 1px 4px #000;padding-left:6px}
+#track.lost{color:#ffd27d}
+body[data-mode=demo] #title{visibility:hidden}
+body[data-mode=demo] #rescan,body[data-mode=demo] #track,body[data-mode=demo] #reticle,body[data-mode=ar] #chips,#view.empty #rescan,#view.empty #track,#view.empty #bottom,#view:not(.empty) #reticle{display:none}
+#reticle{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);width:min(64vw,300px);text-align:center;font-weight:600;text-shadow:0 1px 6px #000}
+#reticle div{aspect-ratio:1;margin-bottom:16px;border-radius:28px;border:3px solid var(--acc);box-shadow:0 0 0 100vmax rgba(0,0,0,.35);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45;transform:scale(.96)}}
+#bottom{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:10px;padding:0 12px max(12px,env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+#panel,#card{background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:22px;padding:14px 16px}
+#card{position:relative;padding-right:52px}
+#card b{font-size:18px}
+#cYear{color:var(--acc);font-weight:700}
+#cClose{position:absolute;top:6px;right:6px;width:44px;min-height:44px;padding:0;background:none;border:0;color:var(--dim);font-size:18px}
+.now{display:flex;align-items:baseline;gap:12px}
+#year{font-size:44px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--acc)}
+#stage{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bar{position:relative;height:6px;border-radius:3px;background:var(--line);margin:14px 6px 6px}
+#fill{height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+#bar i{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#3a4766;border:2px solid var(--bg)}
+#bar i.on{background:var(--acc)}
+#scrub{width:100%;height:40px;margin:0;accent-color:var(--acc)}
+.yrs{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-top:-6px}
+#ctl{display:flex;gap:12px;margin-top:8px}
+#ctl button{flex:1;min-height:56px}
+#play{flex:1.6!important}
+#play .ipa,#play.on .ip{display:none}
+#play.on .ipa{display:block}
+#hint{font-size:12px;color:var(--dim);text-align:center;margin-top:8px}
+#toast{position:fixed;z-index:9;top:max(84px,calc(env(safe-area-inset-top) + 72px));left:50%;transform:translateX(-50%);max-width:88vw;background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:10px 16px;font-weight:600;text-align:center;opacity:0;transition:opacity .25s;pointer-events:none}
+#toast.on{opacity:1}
+
+@media print{
+  html,body{overflow:visible;height:auto;background:#fff}
+  body>:not(#gen){display:none!important}
+  #gen{position:static;display:block!important;background:#fff;padding:0}
+  .noprint{display:none!important}
+  .qrcard{break-inside:avoid;border:1px solid #ccc}
+}
+</style>
+</head>
+<body>
+<video id="cam" playsinline muted autoplay></video>
+<canvas id="gl"></canvas>
+
+<section id="home" data-screen class="screen active"><div class="wrap">
+  <div class="logo">◈</div>
+  <h1>Tech Evolution <span>AR</span></h1>
+  <p class="dim">Scan a QR code and watch decades of technology unfold in 3D on top of your camera.</p>
+  <button class="primary big" id="start">Start</button>
+  <button id="toGen">Generate QR codes</button>
+  <button data-demo>Demo mode (no camera)</button>
+  <p class="dim" id="libErr"></p>
+</div></section>
+
+<section id="perm" data-screen class="screen"><div class="wrap">
+  <div class="logo">◉</div>
+  <h2>Camera access</h2>
+  <p class="dim">The app uses your rear camera to find QR codes and draw the 3D timeline over the live view.</p>
+  <ul class="note">
+    <li><b>Private:</b> video is processed on your device. Nothing is recorded or uploaded.</li>
+    <li>Your browser will ask for permission next — tap <b>Allow</b>.</li>
+  </ul>
+  <button class="primary big" id="allow">Allow camera</button>
+  <button data-demo>Use demo mode instead</button>
+  <button class="ghost" data-go="home">Back</button>
+</div></section>
+
+<section id="err" data-screen class="screen"><div class="wrap">
+  <div class="logo">⚠</div>
+  <h2 id="errTitle">Camera error</h2>
+  <p class="dim" id="errMsg"></p>
+  <button class="primary" id="retry">Try again</button>
+  <button data-demo>Open demo mode</button>
+  <button class="ghost" data-go="home">Back</button>
+</div></section>
+
+<section id="gen" data-screen class="screen"><div class="wrap">
+  <h2 class="noprint">QR codes</h2>
+  <p class="dim noprint">Print these, or open this page on a second screen and scan it with your phone.</p>
+  <div class="rowbtns noprint"><button data-go="home">Back</button><button class="primary" onclick="print()">Print all</button></div>
+  <div id="qrs"></div>
+</div></section>
+
+<div id="view" data-screen class="empty">
+  <div id="top">
+    <button id="exit" aria-label="Back to home">✕</button>
+    <div id="title"></div>
+    <button id="rescan">Scan another code</button>
+    <div id="chips"></div>
+    <div id="track">● Tracking code</div>
+  </div>
+  <div id="reticle"><div></div>Point the camera at a Tech Evolution QR code</div>
+  <div id="bottom">
+    <div id="card" hidden><button id="cClose" aria-label="Close">✕</button><span id="cYear"></span> · <b id="cName"></b><p id="cDesc"></p></div>
+    <div id="panel">
+      <div class="now"><div id="year"></div><div id="stage"></div></div>
+      <div id="bar"><div id="fill"></div></div>
+      <input id="scrub" type="range" step="0.1" aria-label="Scrub through years">
+      <div class="yrs"><span id="y0"></span><span id="y1"></span></div>
+      <div id="ctl">
+        <button id="prev" aria-label="Previous stage"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button id="play" class="primary" aria-label="Play or pause"><svg class="ip" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg><svg class="ipa" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
+        <button id="next" aria-label="Next stage"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      </div>
+      <div id="hint">Tap a model for details · drag to rotate</div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const smooth = x => x * x * (3 - 2 * x);
+const back = x => 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2;   // ease-out with a little overshoot
+
+/* ---------- 3D building blocks (models are ~1 unit tall, +z is the front) ---------- */
+const mat = (color, glow) => new THREE.MeshStandardMaterial({ color, emissive: glow ? color : 0, emissiveIntensity: .85, roughness: .6, metalness: .1, transparent: true });
+const at = (o, x, y, z) => (o.position.set(x, y, z), o);
+const G = (...parts) => { const g = new THREE.Group(); parts.flat(Infinity).forEach(p => g.add(p)); return g; };
+const box = (w, h, d, color, x = 0, y = 0, z = 0, glow) => at(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, glow)), x, y, z);
+const cyl = (r, h, color, x = 0, y = 0, z = 0, rx = 0) => { const m = at(new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 20), mat(color)), x, y, z); m.rotation.x = rx; return m; };
+// cols x rows of small tiles on the XY plane; w/h = distance between first and last tile centres
+function grid(cols, rows, w, h, s, color, x, y, z, glow) {
+  const geo = new THREE.BoxGeometry(s, s, s * .4), m = mat(color, glow), out = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++)
+    out.push(at(new THREE.Mesh(geo, m), x + (cols > 1 ? (c / (cols - 1) - .5) * w : 0), y + (rows > 1 ? (.5 - r / (rows - 1)) * h : 0), z));
+  return out;
+}
+const keys = (cols, rows, w, d, color, x, y, z) => { const g = at(G(grid(cols, rows, w, d, Math.min(w / cols, d / rows) * .7, color, 0, 0, 0)), x, y, z); g.rotation.x = -Math.PI / 2; return g; };
+const keyboard = (w, d, body, keyc, x, y, z) => at(G(box(w, .03, d, body), keys(12, 4, w * .88, d * .7, keyc, 0, .016, 0)), x, y, z);
+const icons = (cols, rows, w, top, gap, s, z) => [0x4cd964, 0x5ac8fa, 0xff9500, 0xff2d55, 0xffcc00, 0xaf52de].slice(0, rows).map((c, i) => grid(cols, 1, w, 0, s, c, 0, top - i * gap, z, true));
+const BEIGE = 0xd8d2c0, CREAM = 0xe6dfcc, INK = 0x1c1e23, DARK = 0x2b2f36, SILVER = 0xc9ced6, GREEN = 0x39ff7a;
+
+/* ---------- CONTENT ----------
+   To add a topic (tv, car, camera…), add one entry here — nothing else needs to change.
+   The QR code for a topic is the text "tech:<id>". Stage years must be ascending;
+   `label` optionally overrides how the year is shown (e.g. "1990s"). */
+const TOPICS = {
+  computer: { id: 'computer', title: 'Computers', stages: [
+    { year: 1945, name: 'ENIAC', description: 'A room-sized machine with about 18,000 vacuum tubes — the first general-purpose electronic computer.',
+      build: () => G([-.36, 0, .36].map(x => [box(.32, .8, .18, 0x4a4f57, x, .05, 0), grid(5, 6, .22, .42, .028, 0xffb347, x, .16, .09, true), box(.26, .1, .01, INK, x, -.2, .092)]),
+        box(.5, .22, .26, 0x6b4f3a, 0, -.24, .26)) },
+    { year: 1981, name: 'IBM PC', description: 'The beige box that made the personal computer an office standard.',
+      build: () => G(box(.8, .16, .6, BEIGE, 0, -.27, 0), box(.2, .05, .01, INK, .08, -.26, .3), box(.2, .05, .01, INK, .29, -.26, .3),
+        box(.5, .4, .42, BEIGE, 0, .01, -.04), box(.38, .28, .01, 0x06260f, 0, .02, .172),
+        [.22, .3, .16].map((w, i) => box(w, .016, .006, GREEN, -.17 + w / 2, .11 - i * .05, .178, true)),
+        keyboard(.7, .22, BEIGE, 0xf2eee2, 0, -.335, .48)) },
+    { year: 1984, name: 'Macintosh', description: 'Brought the mouse and the graphical desktop to everyday users.',
+      build: () => G(box(.46, .6, .44, CREAM, 0, -.05, 0), box(.3, .23, .01, 0xcfe3dc, 0, .06, .222, true), box(.3, .025, .012, 0x333333, 0, .162, .222),
+        box(.14, .015, .01, INK, .08, -.17, .222), keyboard(.42, .15, CREAM, 0xf6f2e6, -.04, -.335, .38), box(.06, .03, .09, CREAM, .3, -.335, .38)) },
+    { year: 1995, label: '1990s', name: 'Desktop tower', description: 'Tower case plus CRT monitor — the multimedia and early-internet home PC.',
+      build: () => G(box(.22, .62, .5, BEIGE, .36, -.04, 0), box(.16, .035, .01, 0x9a9484, .36, .2, .252), box(.16, .035, .01, 0x9a9484, .36, .14, .252),
+        box(.025, .025, .01, GREEN, .3, .02, .252, true), box(.52, .42, .44, BEIGE, -.14, .02, -.03), box(.3, .16, .3, BEIGE, -.14, -.27, -.03),
+        box(.42, .32, .01, 0x1a73e8, -.14, .03, .192, true), box(.42, .035, .012, 0xb8c0cc, -.14, -.112, .193),
+        keyboard(.5, .17, BEIGE, 0xf2eee2, -.14, -.335, .36)) },
+    { year: 2005, label: '2000s', name: 'Laptop', description: 'Wi-Fi and better batteries turned the computer into something you carry.',
+      build: () => { const lid = at(G(box(.72, .48, .025, DARK, 0, .24, 0), box(.64, .4, .006, 0x2a7de1, 0, .25, .014, true)), 0, -.2, -.25); lid.rotation.x = -.3;
+        return G(box(.72, .05, .5, DARK, 0, -.225, 0), keys(13, 4, .6, .2, 0x4a505c, 0, -.2, -.07), box(.2, .006, .11, 0x3a3f48, 0, -.198, .16), lid); } },
+    { year: 2022, label: '2020s', name: 'Ultrabook / all-in-one', description: 'Razor-thin, silent and always connected — the computer disappears into the screen.',
+      build: () => G(box(.96, .58, .025, SILVER, 0, .12, 0), box(.92, .54, .006, 0x7b5cff, 0, .12, .013, true),
+        box(.36, .24, .006, 0x4de1ff, -.2, .16, .017, true), box(.3, .2, .006, 0xff7ad9, .22, .05, .017, true),
+        box(.07, .2, .02, SILVER, 0, -.26, -.02), box(.3, .016, .2, SILVER, 0, -.362, 0), keyboard(.46, .13, 0xe8ebef, 0xffffff, 0, -.36, .26)) },
+  ] },
+  phone: { id: 'phone', title: 'Phones', stages: [
+    { year: 1983, name: 'Motorola DynaTAC', description: 'The first handheld mobile phone: nearly 800 g and 30 minutes of talk time.',
+      build: () => G(box(.24, .7, .2, BEIGE, 0, -.1, 0), cyl(.022, .3, INK, -.07, .4, 0), box(.16, .06, .01, INK, 0, .17, .101),
+        box(.16, .05, .01, 0xff3b30, 0, .06, .101, true), grid(3, 5, .13, .3, .036, 0xf5f5f5, 0, -.2, .1)) },
+    { year: 2000, name: 'Nokia 3310', description: 'Nearly indestructible, days of battery, and Snake — over 100 million sold.',
+      build: () => G(box(.3, .66, .12, 0x1f2f5c, 0, 0, 0), box(.22, .16, .01, 0x9bbf6a, 0, .15, .061, true), box(.1, .035, .012, SILVER, 0, 0, .061),
+        grid(3, 4, .18, .2, .042, SILVER, 0, -.17, .058)) },
+    { year: 2002, name: 'BlackBerry', description: 'A full QWERTY keyboard and push email put the office in your pocket.',
+      build: () => G(box(.42, .62, .07, 0x16181d, 0, 0, 0), box(.36, .26, .01, 0x4f9dd6, 0, .14, .036, true), box(.04, .04, .015, 0xe8e8e8, 0, -.04, .036),
+        grid(10, 4, .34, .15, .026, 0xbfc4cc, 0, -.18, .034)) },
+    { year: 2007, name: 'iPhone', description: 'Multi-touch replaced the keypad and turned the phone into a pocket computer.',
+      build: () => G(box(.36, .68, .05, 0xb9bec6, 0, 0, 0), box(.345, .665, .01, 0x0a0a0c, 0, 0, .026), box(.3, .46, .004, 0x1b2333, 0, .04, .032, true),
+        icons(4, 4, .21, .21, .085, .05, .035), cyl(.03, .008, 0x34343a, 0, -.27, .03, Math.PI / 2)) },
+    { year: 2015, name: 'Large-screen smartphone', description: 'Big HD displays made the phone the main screen for video, maps and apps.',
+      build: () => G(box(.42, .84, .035, 0xd4af7a, 0, 0, 0), box(.405, .825, .008, 0x0a0a0c, 0, 0, .018), box(.37, .68, .004, 0x12306b, 0, .01, .023, true),
+        icons(4, 6, .27, .28, .1, .055, .026), cyl(.028, .006, 0xd4af7a, 0, -.375, .021, Math.PI / 2)) },
+    { year: 2021, label: '2020s', name: 'Foldable phone', description: 'Flexible OLED lets a phone unfold into a small tablet.',
+      build: () => { const half = s => { const g = G(box(.34, .72, .03, 0x23262d, s * .17, 0, 0), box(.32, .68, .004, 0x8a5cff, s * .17, 0, .017, true), icons(3, 3, .18, .2, .1, .05, .02).map(r => r.map(m => (m.position.x += s * .17, m)))); g.rotation.y = -s * .35; return g; };
+        return G(half(-1), half(1), cyl(.02, .72, 0x8f96a3, 0, 0, -.005)); } },
+  ] },
+};
+
+/* ---------- pure logic ---------- */
+function parseCode(text) {   // "tech:computer" -> "computer", anything unknown -> null
+  const m = /^tech:([\w-]+)$/i.exec(String(text).trim()), id = m && m[1].toLowerCase();
+  return id && Object.prototype.hasOwnProperty.call(TOPICS, id) ? id : null;
+}
+// playhead t is in "stage units" (0 = first stage, N-1 = last); years are interpolated between stages
+function yearAt(st, t) { t = clamp(t, 0, st.length - 1); const i = Math.min(Math.floor(t), st.length - 2); return st[i].year + (st[i + 1].year - st[i].year) * (t - i); }
+function tAtYear(st, y) { for (let i = 0; i < st.length - 1; i++) if (y <= st[i + 1].year) return Math.max(0, i + (y - st[i].year) / (st[i + 1].year - st[i].year)); return st.length - 1; }
+function drawQR(tp) {
+  const qr = qrcode(0, 'M'); qr.addData('tech:' + tp.id); qr.make();
+  const n = qr.getModuleCount(), m = 24, q = 4, size = (n + q * 2) * m, cv = document.createElement('canvas'), c = cv.getContext('2d');
+  cv.width = size; cv.height = size + 100;
+  c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height); c.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let x = 0; x < n; x++) if (qr.isDark(r, x)) c.fillRect((x + q) * m, (r + q) * m, m, m);
+  c.textAlign = 'center'; c.font = 'bold 44px system-ui,sans-serif'; c.fillText('Tech Evolution AR — ' + tp.title, size / 2, size + 16, size - 40);
+  c.font = '30px monospace'; c.fillText('tech:' + tp.id, size / 2, size + 64);
+  return cv;
+}
+
+/* ---------- state ---------- */
+const GAP = 1.1, CAM_Z = 10, FOV = 40, INTRO = -.75;
+const S = { mode: null, topic: null, t: 0, target: 0, playing: false, stream: null, zoom: 1, seen: 0, locked: false };
+const A = { pos: null, scale: 1, roll: 0 };          // where the timeline should be; the anchor group eases towards it
+const vis = { w: 1, h: 1, min: 1, ppw: 1 };          // visible world size at z=0, and world units per CSS pixel
+const video = $('cam'), scanCv = document.createElement('canvas'), sctx = scanCv.getContext('2d', { willReadFrequently: true });
+let renderer, scene, camera, anchor, pivot, rail, bar, ray, stageGroups = [], raf = 0, last = 0, lastScan = 0, toastT;
+
+function show(id) { document.querySelectorAll('[data-screen]').forEach(s => s.classList.toggle('active', s.id === id)); }
+function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2200); }
+function setText(id, v) { const el = $(id); if (el.textContent !== String(v)) el.textContent = v; }
+
+/* ---------- 3D scene ---------- */
+function initGL() {
+  if (renderer) return;
+  renderer = new THREE.WebGLRenderer({ canvas: $('gl'), alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(FOV, 1, .1, 100); camera.position.z = CAM_Z;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a3350, .75));
+  scene.add(at(new THREE.DirectionalLight(0xffffff, .55), 2, 4, 6));
+  rail = new THREE.Group(); pivot = G(rail); anchor = G(pivot); scene.add(anchor);
+  A.pos = new THREE.Vector3(); ray = new THREE.Raycaster();
+  addEventListener('resize', resize);
+
+  const gl = $('gl'); let drag = null;
+  gl.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; gl.setPointerCapture(e.pointerId); });
+  gl.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY;
+    pivot.rotation.y += dx * .008; pivot.rotation.x = clamp(pivot.rotation.x + dy * .005, -.6, .6);
+  });
+  gl.addEventListener('pointerup', e => { if (drag && drag.moved < 8) pick(e.clientX, e.clientY); drag = null; });
+  gl.addEventListener('pointercancel', () => drag = null);
+  gl.addEventListener('wheel', e => { e.preventDefault(); S.zoom = clamp(S.zoom * (e.deltaY < 0 ? 1.08 : .93), .5, 2.5); }, { passive: false });
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  vis.h = 2 * CAM_Z * Math.tan(FOV * Math.PI / 360); vis.w = vis.h * w / h; vis.min = Math.min(vis.w, vis.h); vis.ppw = vis.h / h;
+  if (S.mode === 'demo') { A.pos.set(0, vis.h * .14, 0); A.scale = Math.min(vis.w * .5, vis.h * .3); A.roll = 0; }
+}
+
+function makeLabel(st) {
+  const cv = document.createElement('canvas'), c = cv.getContext('2d'); cv.width = 512; cv.height = 160;
+  c.fillStyle = 'rgba(10,14,23,.75)'; c.fillRect(0, 0, 512, 160);
+  c.textAlign = 'center'; c.fillStyle = '#4de1ff'; c.font = 'bold 64px system-ui,sans-serif'; c.fillText(st.label || st.year, 256, 70);
+  c.fillStyle = '#fff'; c.font = '38px system-ui,sans-serif'; c.fillText(st.name, 256, 126, 490);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }));
+  sp.scale.set(1, .31, 1); sp.position.y = -.72; return sp;
+}
+
+function clearTopic() {
+  S.topic = null; S.locked = false; S.playing = false; stageGroups = [];
+  if (rail) {
+    rail.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+    rail.clear();
+  }
+  $('view').classList.add('empty'); $('card').hidden = true;
+  setText('title', S.mode === 'ar' ? 'Scanning…' : '');
+}
+
+function loadTopic(id) {
+  clearTopic();
+  const tp = S.topic = TOPICS[id], st = tp.stages, N = st.length;
+  stageGroups = st.map((s, i) => {
+    const model = s.build(), g = G(model, makeLabel(s)), mats = new Set();
+    g.traverse(o => o.material && mats.add(o.material));
+    g.position.x = i * GAP; g.userData = { i, model, mats: [...mats] };
+    rail.add(g); return g;
+  });
+  // the timeline rail under the models: dim track, glowing progress bar, one tick per stage
+  bar = box(1, .03, .03, 0x4de1ff, 0, -.95, 0, true); bar.geometry.translate(.5, 0, 0);
+  rail.add(box(GAP * (N - 1), .014, .014, 0x5a6785, GAP * (N - 1) / 2, -.95, 0), bar, ...st.map((_, i) => box(.06, .06, .06, 0xffffff, i * GAP, -.95, 0)));
+
+  $('bar').querySelectorAll('i').forEach(d => d.remove());
+  st.forEach((_, i) => { const d = document.createElement('i'); d.style.left = i / (N - 1) * 100 + '%'; $('bar').append(d); });
+  const sc = $('scrub'); sc.min = st[0].year; sc.max = st[N - 1].year;
+  setText('y0', st[0].year); setText('y1', st[N - 1].year); setText('title', tp.title);
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.id === id));
+  $('view').classList.remove('empty');
+  pivot.rotation.set(.22, 0, 0); S.zoom = 1; S.t = INTRO; S.target = N - 1; S.playing = true;
+}
+
+function step(dt, now) {
+  const st = S.topic.stages, N = st.length;
+  if (S.t !== S.target) {
+    // while playing, slow down near each stage so it lingers, speed up in between (~3 s per stage)
+    const f = S.t - Math.floor(S.t), rate = S.playing ? .12 + .9 * Math.sin(Math.PI * f) ** 2 : 2.4, d = S.target - S.t;
+    S.t += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
+  } else S.playing = false;
+
+  const t = S.t, tc = clamp(t, 0, N - 1), cur = Math.round(tc), y = yearAt(st, tc);
+  rail.position.x = -tc * GAP;
+  bar.scale.x = Math.max(1e-3, tc * GAP);
+  stageGroups.forEach((g, i) => {
+    const a = smooth(clamp((t - (i - .75)) / .5, 0, 1)), focus = Math.max(0, 1 - Math.abs(t - i));
+    g.visible = a > .01;
+    g.scale.setScalar(Math.max(1e-3, back(a) * (.6 + .4 * focus)));
+    g.userData.mats.forEach(m => m.opacity = a);
+    g.userData.model.rotation.y = -.35 + .45 * Math.sin(now / 900 + i);
+  });
+
+  setText('year', Math.round(y));
+  setText('stage', `${st[cur].label || st[cur].year} · ${st[cur].name}`);
+  $('fill').style.width = tc / (N - 1) * 100 + '%';
+  $('bar').querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i <= tc + .01));
+  $('scrub').value = y;
+  $('play').classList.toggle('on', S.playing);
+}
+
+function pick(x, y) {
+  if (!S.topic) return;
+  ray.setFromCamera({ x: x / innerWidth * 2 - 1, y: -(y / innerHeight) * 2 + 1 }, camera);
+  const hit = ray.intersectObjects(stageGroups.filter(g => g.visible), true)[0];
+  if (!hit) { $('card').hidden = true; return; }
+  let o = hit.object; while (o.userData.i === undefined) o = o.parent;
+  const i = o.userData.i, s = S.topic.stages[i];
+  setText('cYear', s.label || s.year); setText('cName', s.name); setText('cDesc', s.description);
+  $('card').hidden = false; S.playing = false; S.target = i;
+}
+
+/* ---------- QR scanning + anchoring ---------- */
+function scan(now) {
+  if (now - lastScan < 80 || video.readyState < 2 || !video.videoWidth) return;
+  lastScan = now;
+  const vw = video.videoWidth, vh = video.videoHeight, k = Math.min(1, 640 / Math.max(vw, vh)), w = Math.round(vw * k), h = Math.round(vh * k);
+  if (scanCv.width !== w || scanCv.height !== h) { scanCv.width = w; scanCv.height = h; }
+  sctx.drawImage(video, 0, 0, w, h);
+  const code = jsQR(sctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+  if (!code || !code.data) return;
+  const id = parseCode(code.data);
+  if (!id) { if (!S.topic) toast('Unknown code — that isn’t a Tech Evolution QR'); return; }
+  if (!S.topic) { loadTopic(id); if (navigator.vibrate) navigator.vibrate(40); }
+  else if (id !== S.topic.id) return toast(`Tap “Scan another code” to switch to ${TOPICS[id].title}`);
+
+  // scan-canvas px -> video px -> screen px (video is shown with object-fit: cover) -> world units on the z=0 plane
+  const cover = Math.max(innerWidth / vw, innerHeight / vh);
+  const P = p => new THREE.Vector2((p.x / k - vw / 2) * cover * vis.ppw, -(p.y / k - vh / 2) * cover * vis.ppw);
+  const L = code.location, tl = P(L.topLeftCorner), tr = P(L.topRightCorner), bl = P(L.bottomLeftCorner), br = P(L.bottomRightCorner);
+  const size = (tl.distanceTo(tr) + tl.distanceTo(bl)) / 2;
+  // ponytail: 2D anchor (position + scale + in-plane tilt), not a full 6-DoF pose. The tilt is folded into ±45° so the
+  // timeline stays upright whichever way the code is turned. Upgrade path: homography -> pose from the 4 corners.
+  let roll = Math.atan2(tr.y - tl.y, tr.x - tl.x); roll -= Math.round(roll / (Math.PI / 2)) * Math.PI / 2;
+  A.scale = clamp(size * 1.1, vis.min * .16, vis.min * .38); A.roll = roll;
+  const lift = size / 2 + A.scale * .95;   // float the timeline just above the code so the code stays visible
+  A.pos.set((tl.x + tr.x + bl.x + br.x) / 4 - Math.sin(roll) * lift, (tl.y + tr.y + bl.y + br.y) / 4 + Math.cos(roll) * lift, 0);
+  if (!S.locked) { S.locked = true; anchor.position.copy(A.pos); anchor.scale.setScalar(A.scale); anchor.rotation.z = roll; }
+  S.seen = now;
+}
+
+function frame(now) {
+  raf = requestAnimationFrame(frame);
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if (S.mode === 'ar') { scan(now); $('track').classList.toggle('lost', now - S.seen > 600); setText('track', now - S.seen > 600 ? '○ Code out of view — timeline pinned' : '● Tracking code'); }
+  anchor.visible = !!S.topic && (S.mode === 'demo' || S.locked);
+  anchor.position.lerp(A.pos, .2);
+  anchor.scale.setScalar(anchor.scale.x + (A.scale * S.zoom - anchor.scale.x) * .2);
+  anchor.rotation.z += (A.roll - anchor.rotation.z) * .2;
+  if (S.topic) step(dt, now);
+  renderer.render(scene, camera);
+}
+
+/* ---------- modes ---------- */
+function enter(mode) {
+  try { initGL(); } catch (e) { return showError({ name: 'WebGL' }); }
+  S.mode = mode; document.body.dataset.mode = mode; show('view'); resize(); clearTopic();
+  if (mode === 'demo') loadTopic(Object.keys(TOPICS)[0]);
+  cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(frame);
+}
+function stopCamera() { if (S.stream) S.stream.getTracks().forEach(t => t.stop()); S.stream = null; video.srcObject = null; }
+function leave() { cancelAnimationFrame(raf); stopCamera(); S.mode = null; delete document.body.dataset.mode; show('home'); }
+
+async function startCamera() {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw { name: 'Unsupported' };
+    S.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+    video.srcObject = S.stream; await video.play();
+    enter('ar');
+  } catch (e) { stopCamera(); showError(e); }
+}
+function showError(e) {
+  const n = e && e.name, local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const [title, msg] =
+    n === 'Unsupported' ? ['Camera not available', location.protocol !== 'https:' && !local ? 'Browsers only allow camera access on secure (https://) pages. Open this app from an HTTPS address and try again.' : 'This browser doesn’t support camera access. Try Safari on iPhone or Chrome on Android.'] :
+    n === 'NotAllowedError' || n === 'SecurityError' ? ['Camera access denied', 'To use AR, allow the camera for this site in your browser’s site settings, then tap “Try again”.'] :
+    n === 'NotFoundError' || n === 'OverconstrainedError' ? ['No camera found', 'This device doesn’t seem to have a camera. You can still explore every timeline in demo mode.'] :
+    n === 'NotReadableError' || n === 'AbortError' ? ['Camera is busy', 'Another app may be using the camera. Close it and try again.'] :
+    n === 'WebGL' ? ['3D not supported', 'This browser couldn’t start WebGL, which the 3D view needs.'] :
+    ['Camera error', (e && e.message) || 'Something went wrong starting the camera.'];
+  setText('errTitle', title); setText('errMsg', msg); $('retry').hidden = n === 'WebGL'; show('err');
+}
+
+function buildGen() {
+  if ($('qrs').children.length) return;
+  Object.values(TOPICS).forEach(tp => {
+    const cv = drawQR(tp), card = document.createElement('div'), a = document.createElement('a');
+    card.className = 'qrcard'; a.className = 'btn noprint'; a.textContent = 'Download PNG';
+    a.download = `tech-evolution-qr-${tp.id}.png`; a.href = cv.toDataURL('image/png');
+    card.append(cv, a); $('qrs').append(card);
+  });
+}
+
+/* ---------- self-check: open index.html?selftest ---------- */
+function selfTest() {
+  const ok = (c, m) => { if (!c) throw new Error('Self-test FAILED: ' + m); };
+  for (const [id, tp] of Object.entries(TOPICS)) {
+    ok(tp.id === id && tp.title && tp.stages.length >= 6, id + ' has 6+ stages');
+    tp.stages.forEach((s, i) => {
+      ok(s.name && s.description && (i === 0 || s.year > tp.stages[i - 1].year), `${id}/${s.name} fields + ascending year`);
+      const ce = console.error, errs = []; console.error = m => errs.push(m);   // three.js reports bad scene parts via console.error
+      let model; try { model = s.build(); } finally { console.error = ce; }
+      ok(model.isGroup && !errs.length, `${id}/${s.name} builds a model ${errs[0] || ''}`);
+      ok(Math.abs(tAtYear(tp.stages, s.year) - i) < 1e-9 && yearAt(tp.stages, i) === s.year, `${id}/${s.name} year<->playhead`);
+    });
+    ok(parseCode(` TECH:${id} `) === id, 'parse ' + id);
+    const cv = drawQR(tp), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height), r = jsQR(d.data, cv.width, cv.height);
+    ok(r && r.data === 'tech:' + id, 'QR generate->decode ' + id);
+  }
+  ok(parseCode('tech:constructor') === null && parseCode('https://example.com') === null && parseCode('tech:') === null, 'unknown codes rejected');
+  return 'Self-test passed';
+}
+
+/* ---------- wiring ---------- */
+if (!window.THREE || !window.jsQR || !window.qrcode) {
+  setText('libErr', 'Couldn’t load the 3D/QR libraries. Check your internet connection and reload.');
+  document.querySelectorAll('#home button').forEach(b => b.disabled = true);
+} else {
+  $('start').onclick = () => show('perm');
+  $('allow').onclick = $('retry').onclick = startCamera;
+  $('toGen').onclick = () => { buildGen(); show('gen'); };
+  document.querySelectorAll('[data-demo]').forEach(b => b.onclick = () => enter('demo'));
+  document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => show(b.dataset.go));
+  $('exit').onclick = leave;
+  $('rescan').onclick = clearTopic;
+  $('cClose').onclick = () => $('card').hidden = true;
+  Object.values(TOPICS).forEach(tp => { const b = document.createElement('button'); b.className = 'chip'; b.dataset.id = tp.id; b.textContent = tp.title; b.onclick = () => loadTopic(tp.id); $('chips').append(b); });
+
+  const last_ = () => S.topic.stages.length - 1;
+  const go = d => { if (!S.topic) return; S.playing = false; S.target = clamp(d > 0 ? Math.floor(S.t + 1e-6) + 1 : Math.ceil(S.t - 1e-6) - 1, 0, last_()); };
+  const toggle = () => {
+    if (!S.topic) return;
+    if (S.playing) { S.playing = false; S.target = S.t; return; }
+    if (S.t >= last_()) S.t = INTRO;
+    S.target = last_(); S.playing = true;
+  };
+  $('play').onclick = toggle; $('prev').onclick = () => go(-1); $('next').onclick = () => go(1);
+  $('scrub').oninput = e => { if (S.topic) { S.playing = false; S.t = S.target = tAtYear(S.topic.stages, +e.target.value); } };
+  addEventListener('keydown', e => { if (!S.mode) return; if (e.key === ' ') { e.preventDefault(); toggle(); } else if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1); });
+
+  if (/[?&]selftest/.test(location.search)) { let r; try { r = selfTest(); } catch (e) { r = e.message; } console.log(r); toast(r); }
+}
+</script>
+</body>
+</html>
